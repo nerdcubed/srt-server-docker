@@ -1,34 +1,52 @@
-FROM alpine:latest
+FROM debian:buster as build
 
+# Define version args
+ARG SRT_VERSION=v1.4.1
+ARG SLS_VERSION=v1.4.4
+
+# Install build dependencies
+WORKDIR /app
+RUN apt-get update && apt-get install -y \
+  tclsh \
+  pkg-config \
+  cmake \
+  libssl-dev \
+  zlib1g-dev \
+  build-essential \
+  git
+
+# Compile SRT
+RUN git clone --branch ${SRT_VERSION} https://github.com/Haivision/srt.git srt && \
+  cd srt && \
+  ./configure && \
+  make install && \
+  cd ..
+
+# Compile SLS
+ENV LD_LIBRARY_PATH /usr/local/lib
+RUN git clone --branch ${SLS_VERSION} https://github.com/Edward-Wu/srt-live-server.git sls && \
+  cd sls && \
+  make && \
+  cd ..
+
+# Entry image
+FROM debian:buster
 WORKDIR /app
 
-# Install requirements
-RUN apk --no-cache add ca-certificates \
-    git \
-    tcl \
-    pkgconfig \
-    cmake \
-    libressl-dev \
-    zlib-dev \
-    alpine-sdk
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+  tclsh \
+  libssl-dev \
+  zlib1g-dev && \
+  rm -rf /var/lib/apt/lists/*
 
-# Build SRT
-RUN git clone -b v1.4.1 https://github.com/Haivision/srt && \
-    cd srt/ && \
-    ls && \
-    ./configure && \
-    make && \
-    make install && \ 
-    cd ..
+# Copy SRT library
+ENV LD_LIBRARY_PATH /usr/local/lib
+COPY --from=build /usr/local/lib/libsrt.so.1 /usr/local/lib/libsrt.so.1
 
-# Build srt-live-server
-RUN git clone -b v1.4.4 https://github.com/Edward-Wu/srt-live-server.git && \
-    cd srt-live-server/ && \
-    make && \
-    cd ..
+# Copy binaries
+COPY --from=build /app/sls/bin/sls .
+COPY --from=build /app/sls/bin/slc .
+COPY --from=build /app/sls/sls.conf .
 
-# Cleanup
-RUN cp srt-live-server/bin/sls . && \
-    rm -r srt/ srt-live-server/
-
-CMD ./sls -c ../sls.conf
+ENTRYPOINT ["/app/sls"]
