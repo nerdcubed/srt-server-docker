@@ -2,7 +2,7 @@ FROM debian:buster as build
 
 # Define version args
 ARG SRT_VERSION=v1.4.1
-ARG SLS_VERSION=v1.4.4
+ARG SLS_VERSION=v1.4.5
 
 # Install build dependencies
 WORKDIR /app
