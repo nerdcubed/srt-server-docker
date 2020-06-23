@@ -1,21 +1,19 @@
-FROM debian:buster as build
-
-# Define build environment
-ENV LD_LIBRARY_PATH /usr/local/lib
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-  tclsh \
-  pkg-config \
-  cmake \
-  libssl-dev \
-  zlib1g-dev \
-  build-essential \
-  git
+# Build stage
+FROM alpine:latest as build
 
 # Define version args
 ARG SRT_VERSION=v1.4.1
 ARG SLS_VERSION=V1.4.8
+
+# Install build dependencies
+RUN apk update
+RUN apk add --no-cache \
+  linux-headers \
+  alpine-sdk \
+  cmake \
+  tcl \
+  openssl-dev \
+  zlib-dev
 
 # Clone projects
 WORKDIR /source
@@ -32,24 +30,30 @@ WORKDIR /source/sls
 RUN make
 
 # Entry image
-FROM debian:buster
-WORKDIR /app
+FROM alpine:latest
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-  tclsh \
-  libssl-dev \
-  zlib1g-dev && \
-  rm -rf /var/lib/apt/lists/*
+# Setup runtime
+ENV LD_LIBRARY_PATH /lib:/usr/lib:/usr/local/lib64
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache openssl libstdc++ && \
+    adduser -D srt && \
+    mkdir /etc/sls /logs && \
+    chown srt /logs
 
-# Copy SRT library
-ENV LD_LIBRARY_PATH /usr/local/lib
-COPY --from=build /usr/local/lib/* /usr/local/lib/
+# Copy SRT libraries
+COPY --from=build /usr/local/bin/srt-* /usr/local/bin/
+COPY --from=build /usr/local/lib64/libsrt* /usr/local/lib64/
 
-# Copy binaries
-COPY --from=build /source/sls/bin/sls .
-COPY --from=build /source/sls/bin/slc .
-COPY --from=build /source/sls/sls.conf .
+# Copy SLS binary
+COPY --from=build /source/sls/bin/* /usr/local/bin/
+COPY sls.conf /etc/sls/
 
-EXPOSE 8080
-ENTRYPOINT ["/app/sls"]
+# Use non-root user
+USER srt
+WORKDIR /home/srt
+
+# Define entrypoint
+VOLUME /logs
+EXPOSE 1935/udp
+ENTRYPOINT ["sls", "-c", "/etc/sls/sls.conf"]
