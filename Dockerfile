@@ -1,11 +1,9 @@
 FROM debian:buster as build
 
-# Define version args
-ARG SRT_VERSION=v1.4.1
-ARG SLS_VERSION=V1.4.8
+# Define build environment
+ENV LD_LIBRARY_PATH /usr/local/lib
 
 # Install build dependencies
-WORKDIR /app
 RUN apt-get update && apt-get install -y \
   tclsh \
   pkg-config \
@@ -15,19 +13,23 @@ RUN apt-get update && apt-get install -y \
   build-essential \
   git
 
+# Define version args
+ARG SRT_VERSION=v1.4.1
+ARG SLS_VERSION=V1.4.8
+
+# Clone projects
+WORKDIR /source
+RUN git clone --branch ${SRT_VERSION} https://github.com/Haivision/srt.git srt
+RUN git clone --branch ${SLS_VERSION} https://github.com/Edward-Wu/srt-live-server.git sls
+
 # Compile SRT
-RUN git clone --branch ${SRT_VERSION} https://github.com/Haivision/srt.git srt && \
-  cd srt && \
-  ./configure && \
-  make install && \
-  cd ..
+WORKDIR /source/srt
+RUN ./configure
+RUN make install
 
 # Compile SLS
-ENV LD_LIBRARY_PATH /usr/local/lib
-RUN git clone --branch ${SLS_VERSION} https://github.com/Edward-Wu/srt-live-server.git sls && \
-  cd sls && \
-  make && \
-  cd ..
+WORKDIR /source/sls
+RUN make
 
 # Entry image
 FROM debian:buster
@@ -42,11 +44,12 @@ RUN apt-get update && apt-get install -y \
 
 # Copy SRT library
 ENV LD_LIBRARY_PATH /usr/local/lib
-COPY --from=build /usr/local/lib/libsrt.so.1 /usr/local/lib/libsrt.so.1
+COPY --from=build /usr/local/lib/* /usr/local/lib/
 
 # Copy binaries
-COPY --from=build /app/sls/bin/sls .
-COPY --from=build /app/sls/bin/slc .
-COPY --from=build /app/sls/sls.conf .
+COPY --from=build /source/sls/bin/sls .
+COPY --from=build /source/sls/bin/slc .
+COPY --from=build /source/sls/sls.conf .
 
+EXPOSE 8080
 ENTRYPOINT ["/app/sls"]
