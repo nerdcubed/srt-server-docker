@@ -2,7 +2,7 @@
 FROM alpine:latest as build
 
 # Define version args
-ARG SRT_VERSION=v1.4.1
+ARG SRT_VERSION=v1.4.2
 ARG SLS_VERSION=V1.4.8
 
 # Install build dependencies
