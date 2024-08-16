@@ -1,0 +1,10 @@
+version: '3'
+services:
+  srt:
+    image: ghcr.io/nerdcubed/srt-server-docker/srt-server:6c9570e
+    ports: 
+      - "8100:8080/udp"
+    volumes:
+      - type: bind
+        source: /DATA/AppData/sls/sls.conf
+        target: /etc/sls/sls.conf
